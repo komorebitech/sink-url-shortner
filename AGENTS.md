@@ -79,3 +79,23 @@ pnpm db:migrate:remote   # mutates the configured remote D1 database
 ## Pull Requests
 
 If you create a PR, wait for all review comments and CI checks by polling for at least 10m. Address failures and review comments. Never merge the PR unless told.
+
+## PR reviewers
+
+When you open a pull request, request 1–2 reviewers who are actively working on the code it changes.
+
+1. **Find recent committers to the changed files (last 90 days).** Use GitHub logins, not git author names. Some commit emails aren't linked to a GitHub account, so their login is empty; for those, use the author of the PR the commit came from:
+   ```bash
+   SINCE=$(date -u -v-90d +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '90 days ago' +%Y-%m-%dT%H:%M:%SZ)
+   for f in $(git diff --name-only origin/HEAD...HEAD); do
+     gh api "repos/{owner}/{repo}/commits?path=$f&since=$SINCE&per_page=100" --jq '.[] | "\(.author.login // "") \(.sha)"' |
+     while read -r login sha; do
+       [ -z "$sha" ] && { sha=$login; login=$(gh api "repos/{owner}/{repo}/commits/$sha/pulls" --jq '.[0].user.login // empty'); }
+       echo "$login"
+     done
+   done | grep -v '^$' | sort | uniq -c | sort -rn
+   ```
+2. **Exclude:** the PR author (`gh api user --jq .login`), bots (`*[bot]`, `dependabot`, `github-actions`), and anyone who is no longer in the org (`gh api orgs/komorebitech/members/<login>` must return 204).
+3. **Pick the top 1–2** by commit count. If none of the changed files has a qualifying committer, fall back to the most active committers to the whole repo over the same 90 days.
+4. **Request them** with `gh pr create --reviewer a,b`, or `gh pr edit <number> --add-reviewer a,b` on an existing PR.
+5. If nobody qualifies, don't guess. Leave reviewers empty and say so when you report the PR.
